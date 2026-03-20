@@ -1,0 +1,111 @@
+'use strict';
+const { spawn } = require('child_process');
+
+// Handles \r (carriage return) from tsh scp progress bars:
+// \r resets the current line; \n flushes it — so only the final state shows.
+function makeLineWriter(out) {
+  let cur = '';
+  return (chunk) => {
+    const parts = chunk.split(/(\r|\n)/);
+    for (const p of parts) {
+      if (p === '\n') { out.appendLine(cur); cur = ''; }
+      else if (p === '\r') { cur = ''; }
+      else { cur += p; }
+    }
+  };
+}
+const path = require('path');
+const vscode = require('vscode');
+const { getRemoteHost, localToRemote, toWindowsPath } = require('./config');
+
+let outputChannel;
+
+function setOutputChannel(ch) {
+  outputChannel = ch;
+}
+
+function tshScp(args) {
+  return new Promise((resolve, reject) => {
+    const cfg = vscode.workspace.getConfiguration('sync-rsync');
+    const tsh = cfg.get('tshPath') || 'tsh.exe';
+    const isScp = path.basename(tsh).replace('.exe', '').toLowerCase() === 'scp';
+    const cmdArgs = isScp ? args : ['scp', ...args];
+
+    outputChannel.appendLine(`> ${path.basename(tsh)} ${isScp ? '' : 'scp '}${args.join(' ')}`);
+
+    const proc = spawn(tsh, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const handleData = makeLineWriter(outputChannel);
+    proc.stdout.on('data', d => handleData(d.toString()));
+    proc.stderr.on('data', d => handleData(d.toString()));
+    proc.on('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error(`tsh scp exited with code ${code}`));
+    });
+    proc.on('error', err => reject(new Error(`tsh spawn error: ${err.message}`)));
+  });
+}
+
+async function deleteRemote(site, localFilePath) {
+  if (!site || !site.deleteRemoteOnLocal) return;
+
+  const remoteHost = getRemoteHost(site);
+  const remoteFile = localToRemote(site, localFilePath);
+
+  return new Promise((resolve) => {
+    const cfg = vscode.workspace.getConfiguration('sync-rsync');
+    const tsh = cfg.get('tshPath') || 'tsh.exe';
+    const isSsh = path.basename(tsh).replace('.exe', '').toLowerCase() !== 'scp';
+
+    outputChannel.appendLine(`> ${path.basename(tsh)} ssh ${remoteHost} rm -f "${remoteFile}"`);
+    const cmdArgs = isSsh
+      ? ['ssh', remoteHost, `rm -f "${remoteFile}"`]
+      : [remoteHost, `rm -f "${remoteFile}"`];
+
+    const proc = spawn(tsh, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    proc.on('close', () => resolve());
+  });
+}
+
+async function uploadFile(site, fsPath) {
+  const remoteHost = getRemoteHost(site);
+  const remotePath = localToRemote(site, fsPath);
+  await tshScp([toWindowsPath(fsPath), `${remoteHost}:${remotePath}`]);
+}
+
+// Upload multiple files to the same site.
+// Groups by remote parent dir → one tsh scp call per group, all groups in parallel.
+async function uploadBatch(site, fsPaths) {
+  const remoteHost = getRemoteHost(site);
+  const groups = new Map();
+  for (const f of fsPaths) {
+    const remotePath = localToRemote(site, f);
+    const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/') + 1);
+    if (!groups.has(remoteDir)) groups.set(remoteDir, []);
+    groups.get(remoteDir).push(f);
+  }
+  await Promise.all(
+    [...groups.entries()].map(([remoteDir, files]) =>
+      tshScp([...files.map(toWindowsPath), `${remoteHost}:${remoteDir}`])
+    )
+  );
+}
+
+async function uploadFolder(site, fsPath) {
+  const remoteHost = getRemoteHost(site);
+  const remotePath = localToRemote(site, fsPath);
+  await tshScp(['-r', toWindowsPath(fsPath), `${remoteHost}:${remotePath}`]);
+}
+
+async function downloadFile(site, fsPath) {
+  const remoteHost = getRemoteHost(site);
+  const remotePath = localToRemote(site, fsPath);
+  await tshScp([`${remoteHost}:${remotePath}`, toWindowsPath(fsPath)]);
+}
+
+async function downloadFolder(site, fsPath) {
+  const remoteHost = getRemoteHost(site);
+  const remotePath = localToRemote(site, fsPath);
+  await tshScp(['-r', `${remoteHost}:${remotePath}`, toWindowsPath(fsPath)]);
+}
+
+module.exports = { setOutputChannel, tshScp, deleteRemote, uploadFile, uploadBatch, uploadFolder, downloadFile, downloadFolder };

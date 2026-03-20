@@ -1,0 +1,95 @@
+{
+  "name": "sync-rsync",
+  "displayName": "Sync Rsync",
+  "description": "Native VSCode file sync to Teleport-managed servers via tsh scp. No WSL, no Cygwin.",
+  "version": "0.1.0",
+  "publisher": "epidco",
+  "engines": { "vscode": "^1.74.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sync-rsync.syncUpContext",
+        "title": "Sync Up → Server",
+        "category": "Sync Rsync"
+      },
+      {
+        "command": "sync-rsync.syncDownContext",
+        "title": "Sync Down ← Server",
+        "category": "Sync Rsync"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "sync-rsync.syncUpContext",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "sync-rsync.syncDownContext",
+          "group": "7_modification@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Sync Rsync",
+      "properties": {
+        "sync-rsync.tshPath": {
+          "type": "string",
+          "default": "tsh.exe",
+          "description": "Path to tsh.exe binary"
+        },
+        "sync-rsync.onSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sync file to server on Ctrl+S"
+        },
+        "sync-rsync.watchExternal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Sync files changed by external tools (Claude Code, etc.)"
+        },
+        "sync-rsync.deleteRemoteOnLocal": {
+          "type": "boolean",
+          "default": false,
+          "description": "Delete remote file when deleted locally. WARNING: irreversible."
+        },
+        "sync-rsync.notification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification on sync complete"
+        },
+        "sync-rsync.autoShowOutputOnError": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show output panel on sync error"
+        },
+        "sync-rsync.sites": {
+          "type": "array",
+          "default": [],
+          "description": "List of sync sites (compatible with sync-rsync.sites format)",
+          "items": {
+            "type": "object",
+            "required": ["name", "localPath", "remotePath"],
+            "properties": {
+              "name":                { "type": "string" },
+              "localPath":           { "type": "string", "description": "Local folder path" },
+              "remotePath":          { "type": "string", "description": "Remote path: user@host:/path/" },
+              "enabled":             { "type": "boolean", "default": true },
+              "watchOnSave":         { "type": "boolean", "default": true },
+              "watchExternal":       { "type": "boolean", "default": true },
+              "deleteRemoteOnLocal": { "type": "boolean", "default": false },
+              "exclude": {
+                "type": "array",
+                "items": { "type": "string" },
+                "default": [".git", "node_modules", "__pycache__", "*.pyc"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
