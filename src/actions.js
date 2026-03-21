@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('fs');
 const vscode = require('vscode');
 const { matchSite, isExcluded, localToRemote } = require('./config');
 const { uploadBatch, uploadFolder, downloadFile, downloadFolder } = require('./transfer');
@@ -21,15 +22,17 @@ function remoteDir(site, fsPath) {
 }
 
 async function flushBatch(site, files) {
+  const existing = files.filter(f => fs.existsSync(f));
+  if (existing.length === 0) return;
   const ts = new Date().toLocaleTimeString();
-  outputChannel.appendLine(`\n[${ts}] Sync Up: ${files.length} file(s)`);
+  outputChannel.appendLine(`\n[${ts}] Sync Up: ${existing.length} file(s)`);
   statusBar.text = '$(sync~spin) Sync Rsync...';
   try {
-    await uploadBatch(site, files);
+    await uploadBatch(site, existing);
     statusBar.text = '$(check) Sync Rsync';
     const cfg = vscode.workspace.getConfiguration('sync-rsync');
     if (cfg.get('notification')) {
-      const names = files.map(f => f.split(/[\\/]/).pop()).join(', ');
+      const names = existing.map(f => f.split(/[\\/]/).pop()).join(', ');
       vscode.window.setStatusBarMessage(`↑ ${names}`, 3000);
     }
   } catch (err) {

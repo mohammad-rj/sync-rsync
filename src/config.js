@@ -44,7 +44,7 @@ function localToRemote(site, localFilePath) {
 }
 
 function isExcluded(site, fsPath) {
-  const excludes = site.exclude || ['.git', 'node_modules', '__pycache__', '*.pyc'];
+  const excludes = site.exclude || ['.git', 'node_modules', '__pycache__', '*.pyc', '*.tmp', '*.tmp.*'];
   const normalized = fsPath.replace(/\\/g, '/');
   return excludes.some(pattern => {
     const rx = pattern.replace('.', '\\.').replace('*', '.*');
