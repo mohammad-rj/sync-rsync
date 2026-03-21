@@ -1,4 +1,5 @@
 'use strict';
+const fs = require('fs');
 const vscode = require('vscode');
 const { matchSite } = require('./config');
 const { setOutputChannel, deleteRemote } = require('./transfer');
@@ -38,6 +39,7 @@ function activate(context) {
 
     const debounced = (uri) => {
       const key = uri.fsPath;
+      try { if (fs.statSync(key).isDirectory()) return; } catch { return; }
       if (pending.has(key)) clearTimeout(pending.get(key));
       pending.set(key, setTimeout(() => {
         pending.delete(key);

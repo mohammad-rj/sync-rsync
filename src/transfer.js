@@ -45,6 +45,27 @@ function tshScp(args) {
   });
 }
 
+// Retry tshScp with exponential backoff up to maxMinutes
+async function tshScpWithRetry(args, maxMinutes = 10) {
+  const maxMs = maxMinutes * 60 * 1000;
+  const start = Date.now();
+  let delay = 2000;
+  let attempt = 0;
+  while (true) {
+    try {
+      await tshScp(args);
+      return;
+    } catch (err) {
+      attempt++;
+      const elapsed = Date.now() - start;
+      if (elapsed + delay > maxMs) throw err;
+      outputChannel.appendLine(`  ↻ retry ${attempt} in ${delay / 1000}s... (${err.message})`);
+      await new Promise(r => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 60000);
+    }
+  }
+}
+
 async function deleteRemote(site, localFilePath) {
   if (!site || !site.deleteRemoteOnLocal) return;
 
@@ -85,7 +106,7 @@ async function uploadBatch(site, fsPaths) {
   }
   await Promise.all(
     [...groups.entries()].map(([remoteDir, files]) =>
-      tshScp([...files.map(toWindowsPath), `${remoteHost}:${remoteDir}`])
+      tshScpWithRetry([...files.map(toWindowsPath), `${remoteHost}:${remoteDir}`])
     )
   );
 }
@@ -93,7 +114,7 @@ async function uploadBatch(site, fsPaths) {
 async function uploadFolder(site, fsPath) {
   const remoteHost = getRemoteHost(site);
   const remotePath = localToRemote(site, fsPath);
-  await tshScp(['-r', toWindowsPath(fsPath), `${remoteHost}:${remotePath}`]);
+  await tshScpWithRetry(['-r', toWindowsPath(fsPath), `${remoteHost}:${remotePath}`]);
 }
 
 async function downloadFile(site, fsPath) {
