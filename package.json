@@ -1,5 +1,5 @@
 {
-  "name": "sync-rsync",
+  "name": "sync-rsync-ep",
   "displayName": "Sync Rsync",
   "description": "Native VSCode file sync to Teleport-managed servers via tsh scp. No WSL, no Cygwin.",
   "version": "0.1.1",
