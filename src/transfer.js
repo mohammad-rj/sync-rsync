@@ -66,6 +66,26 @@ async function tshScpWithRetry(args, maxMinutes = 10) {
   }
 }
 
+// Ensure remote directory exists via tsh ssh mkdir -p
+// Also detects if path exists as a file (not dir) and throws a clear error
+function ensureRemoteDir(host, remoteDir) {
+  return new Promise((resolve, reject) => {
+    const cfg = vscode.workspace.getConfiguration('sync-rsync');
+    const tsh = cfg.get('tshPath') || 'tsh.exe';
+    const cmd = `if [ -f "${remoteDir.replace(/\/$/, '')}" ]; then echo "IS_FILE"; else mkdir -p "${remoteDir}"; fi`;
+    const proc = spawn(tsh, ['ssh', host, cmd], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    proc.stdout.on('data', d => stdout += d.toString());
+    proc.on('close', code => {
+      if (stdout.includes('IS_FILE'))
+        reject(new Error(`Remote path exists as a FILE, not a directory: ${remoteDir}\nDelete it manually on the server first.`));
+      else if (code === 0) resolve();
+      else reject(new Error(`mkdir -p failed (code ${code})`));
+    });
+    proc.on('error', err => reject(err));
+  });
+}
+
 async function deleteRemote(site, localFilePath) {
   if (!site || !site.deleteRemoteOnLocal) return;
 
@@ -90,6 +110,8 @@ async function deleteRemote(site, localFilePath) {
 async function uploadFile(site, fsPath) {
   const remoteHost = getRemoteHost(site);
   const remotePath = localToRemote(site, fsPath);
+  const remoteDir = remotePath.substring(0, remotePath.lastIndexOf('/') + 1);
+  await ensureRemoteDir(remoteHost, remoteDir);
   await tshScp([toWindowsPath(fsPath), `${remoteHost}:${remotePath}`]);
 }
 
@@ -105,9 +127,10 @@ async function uploadBatch(site, fsPaths) {
     groups.get(remoteDir).push(f);
   }
   await Promise.all(
-    [...groups.entries()].map(([remoteDir, files]) =>
-      tshScpWithRetry([...files.map(toWindowsPath), `${remoteHost}:${remoteDir}`])
-    )
+    [...groups.entries()].map(async ([remoteDir, files]) => {
+      await ensureRemoteDir(remoteHost, remoteDir);
+      await tshScpWithRetry([...files.map(toWindowsPath), `${remoteHost}:${remoteDir}`]);
+    })
   );
 }
 
