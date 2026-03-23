@@ -72,7 +72,8 @@ function ensureRemoteDir(host, remoteDir) {
   return new Promise((resolve, reject) => {
     const cfg = vscode.workspace.getConfiguration('sync-rsync');
     const tsh = cfg.get('tshPath') || 'tsh.exe';
-    const cmd = `if [ -f "${remoteDir.replace(/\/$/, '')}" ]; then echo "IS_FILE"; else mkdir -p "${remoteDir}"; fi`;
+    const stripped = remoteDir.replace(/\/$/, '');
+    const cmd = `if [ -f "${stripped}" ]; then if [ -s "${stripped}" ]; then echo "IS_FILE"; else rm "${stripped}" && mkdir -p "${stripped}"; fi; else mkdir -p "${stripped}"; fi`;
     const proc = spawn(tsh, ['ssh', host, cmd], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     proc.stdout.on('data', d => stdout += d.toString());
