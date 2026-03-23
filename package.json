@@ -2,7 +2,7 @@
   "name": "sync-rsync-ep",
   "displayName": "Sync Rsync EP",
   "description": "Native VSCode file sync to Teleport-managed servers via tsh scp. No WSL, no Cygwin.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "epidco",
   "engines": { "vscode": "^1.74.0" },
   "categories": ["Other"],
